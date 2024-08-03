@@ -1,9 +1,16 @@
 const express = require("express");
+const { Kafka } = require("kafkajs");
 const { Order, Product, sequelize } = require("./schema");
-const { where } = require("sequelize");
 
 const app = express();
 const port = 8000;
+
+const kafka = new Kafka({
+  clientId: "my-app",
+  brokers: ["localhost:9092", "localhost:9092"],
+});
+
+const producer = kafka.producer();
 
 app.use(express.json());
 
@@ -38,6 +45,18 @@ app.post("/api/placeorder", async (req, res) => {
       productId,
     });
 
+    await producer.send({
+      topic: "message-order",
+      messages: [
+        {
+          value: JSON.stringify({
+            userLineUid: userId,
+            orderId: order.id,
+          }),
+        },
+      ],
+    });
+
     res.json({
       order,
       message: "Create order successfully",
@@ -49,5 +68,6 @@ app.post("/api/placeorder", async (req, res) => {
 
 app.listen(port, async () => {
   await sequelize.sync();
+  await producer.connect();
   console.log(`Express app listening at http://localhost:${port}`);
 });
